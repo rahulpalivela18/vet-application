@@ -4,6 +4,6 @@ buildCommand = "npm install && npm run build"
 startCommand = "node .output/server/index.mjs"
 
 [deploy]
-healthcheckPath = "/"
+healthcheckPath = "/healthz"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

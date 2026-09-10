@@ -44,8 +44,21 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+function isHealthcheck(request: Request): boolean {
+  const { pathname } = new URL(request.url);
+  return pathname === "/healthz" || pathname === "/health";
+}
+
+function healthcheckResponse(): Response {
+  return new Response("ok", {
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    if (isHealthcheck(request)) return healthcheckResponse();
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
