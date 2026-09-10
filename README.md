@@ -155,11 +155,16 @@ Only the migration-history table is written during repair — no schema changes.
 
 ## Railway deployment notes (gotchas already hit)
 
-- **Node version**: Railway/Nixpacks defaults to Node 18, but deps
-  (`@ai-sdk/*`, Vite 8) require Node 22. Fixed via `engines: >=22` in
-  `package.json` AND the `NIXPACKS_NODE_VERSION=22` service variable —
-  the variable is what Nixpacks actually respects. If a deploy fails, check the
-  Node version line in the build log first.
+- **Node version**: deps require **Node >= 22**. Railway/Nixpacks historically
+  defaulted to Node 18, so `engines: >=22` plus the `NIXPACKS_NODE_VERSION=22`
+  service variable were added. It currently builds on Node 24; the `>=22` constraint
+  is what matters. If a deploy fails, check the Node version line in the build log.
+- **`startCommand` must live under `[deploy]`, never `[build]`.** Railway ignores it
+  under `[build]`, then Nixpacks falls back to its staticfile provider and runs
+  **caddy** instead of the Node server — every request 404s instantly at the proxy
+  (green build, `Server: Caddy`, sub-millisecond 404s), and the service dies after
+  `healthcheckTimeout`. Confirm the build plan shows
+  `start │ node .output/server/index.mjs`.
 - `railway.toml` sets `healthcheckPath = "/healthz"` — a DB-free route handled in
   `src/server.ts` that returns `200 ok` before SSR. The old `/` healthcheck hit the
   DB, so any Supabase hiccup failed the check and Railway marked the deployment
@@ -190,14 +195,13 @@ Only the migration-history table is written during repair — no schema changes.
   locally and on Railway, so `/assistant` errors until a key is added. When picking
   this up: set `AI_GATEWAY_*` locally, add the same vars to the Railway service, then
   test the assistant end-to-end.
-- **One-time migration setup still to do.** The workflow is now CLI + GitHub
-  integration (see [Database migrations](#database-migrations)), but the bootstrap
-  steps need running once: install the CLI, link + baseline `vetnow-dev`, and
-  enable the prod GitHub integration in the Supabase dashboard.
 - **Repo-wide `npm run lint` reports pre-existing Prettier drift** in untouched
   files. Format on touch (`npx prettier --write <file>`) rather than one big reformat.
 
 ### Verified working
 
-- Railway prod deploy (`vet-connect.up.railway.app`) is green on Node 22.
+- Railway prod deploy (`vet-connect.up.railway.app`) is green on Node 24, 1 replica,
+  US West — `GET /healthz` → `200`, `/` and `/find` → `200`.
 - Google OAuth click-through works on the live URL.
+- Migrations baselined on both projects (`supabase migration list` shows local =
+  remote for all 5) and the prod GitHub integration is enabled.
