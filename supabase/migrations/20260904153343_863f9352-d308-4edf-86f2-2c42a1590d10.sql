@@ -1,0 +1,1 @@
+ALTER TABLE public.vets ADD COLUMN IF NOT EXISTS verification_notes text;

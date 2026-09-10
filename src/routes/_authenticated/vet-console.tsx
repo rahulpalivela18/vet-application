@@ -1,0 +1,439 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { Stethoscope, BadgeCheck, ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { listVetAppointments, setAppointmentStatus } from "@/lib/appointments.functions";
+import { getMyAccount, submitVetVerification, updateVetStatus } from "@/lib/account.functions";
+import { listMyWorkingHours, saveMyWorkingHours } from "@/lib/vet-hours.functions";
+import { StatusBadge } from "@/components/vetnow/status-badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  APPOINTMENT_STATUS_META,
+  VET_STATUS_META,
+  consultationLabel,
+  displayName,
+  formatDateTime,
+  formatFee,
+  speciesLabel,
+} from "@/lib/format";
+import type { Enums } from "@/integrations/supabase/types";
+import { Checkbox } from "@/components/ui/checkbox";
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+type DayHours = { dayOfWeek: number; opens: string; closes: string; enabled: boolean };
+
+const DEFAULT_HOURS: DayHours[] = DAY_NAMES.map((_, i) => ({
+  dayOfWeek: i,
+  opens: "10:00",
+  closes: "19:00",
+  enabled: i >= 1 && i <= 6,
+}));
+
+export const Route = createFileRoute("/_authenticated/vet-console")({
+  head: () => ({
+    meta: [
+      { title: "Vet console | VetNow" },
+      {
+        name: "description",
+        content: "Set your live availability status and manage incoming consultation requests.",
+      },
+      { property: "og:title", content: "Vet console | VetNow" },
+      { property: "og:description", content: "Live status control and request queue for VetNow vets." },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
+  component: VetConsolePage,
+});
+
+function VetConsolePage() {
+  const qc = useQueryClient();
+  const fetchAccount = useServerFn(getMyAccount);
+  const fetchAppointments = useServerFn(listVetAppointments);
+  const setStatus = useServerFn(updateVetStatus);
+  const setApptStatus = useServerFn(setAppointmentStatus);
+  const submitVerification = useServerFn(submitVetVerification);
+  const fetchHours = useServerFn(listMyWorkingHours);
+  const saveHours = useServerFn(saveMyWorkingHours);
+
+  const account = useQuery({ queryKey: ["my-account"], queryFn: () => fetchAccount() });
+  const appointments = useQuery({
+    queryKey: ["vet-appointments"],
+    queryFn: () => fetchAppointments(),
+    enabled: Boolean(account.data?.vet),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (status: Enums<"vet_status">) => setStatus({ data: { status } }),
+    onSuccess: () => {
+      toast.success("Availability updated");
+      qc.invalidateQueries({ queryKey: ["my-account"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const apptMutation = useMutation({
+    mutationFn: (input: { id: string; status: "CONFIRMED" | "DECLINED" | "COMPLETED" }) =>
+      setApptStatus({ data: input }),
+    onSuccess: () => {
+      toast.success("Appointment updated");
+      qc.invalidateQueries({ queryKey: ["vet-appointments"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const [regNumber, setRegNumber] = useState("");
+  const [verifNotes, setVerifNotes] = useState("");
+  const [hours, setHours] = useState<DayHours[]>(DEFAULT_HOURS);
+  const [hoursLoaded, setHoursLoaded] = useState(false);
+
+  const hoursQuery = useQuery({
+    queryKey: ["my-working-hours"],
+    queryFn: () => fetchHours(),
+    enabled: Boolean(account.data?.vet),
+  });
+
+  const saved = hoursQuery.data;
+  if (saved && !hoursLoaded) {
+    setHoursLoaded(true);
+    if (saved.length > 0) {
+      setHours(
+        DAY_NAMES.map((_, i) => {
+          const row = saved.find((r) => r.day_of_week === i);
+          return row
+            ? { dayOfWeek: i, opens: row.opens.slice(0, 5), closes: row.closes.slice(0, 5), enabled: true }
+            : { dayOfWeek: i, opens: "10:00", closes: "19:00", enabled: false };
+        }),
+      );
+    }
+  }
+
+  const hoursMutation = useMutation({
+    mutationFn: () =>
+      saveHours({
+        data: {
+          hours: hours
+            .filter((h) => h.enabled)
+            .map((h) => ({ dayOfWeek: h.dayOfWeek, opens: h.opens, closes: h.closes })),
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Working hours saved");
+      qc.invalidateQueries({ queryKey: ["my-working-hours"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const verificationMutation = useMutation({
+    mutationFn: () =>
+      submitVerification({
+        data: { registrationNumber: regNumber.trim(), notes: verifNotes.trim() },
+      }),
+    onSuccess: () => {
+      toast.success("Verification submitted — we'll review it shortly");
+      setRegNumber("");
+      setVerifNotes("");
+      qc.invalidateQueries({ queryKey: ["my-account"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (account.isLoading) {
+    return <p className="mx-auto max-w-5xl px-4 py-16 text-sm text-muted-foreground">Loading console…</p>;
+  }
+
+  const vet = account.data?.vet;
+
+  if (!vet) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-extrabold">No veterinarian profile</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Create your professional profile to start receiving consultation requests.
+        </p>
+        <Button asChild className="mt-5">
+          <Link to="/for-vets">Join as a vet</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const rows = appointments.data ?? [];
+  const pending = rows.filter((a) => a.status === "PENDING");
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-extrabold">Vet console</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {displayName(vet.full_name)} · {vet.qualification}
+          </p>
+        </div>
+        <StatusBadge status={vet.current_status} long />
+      </div>
+
+      <div className="surface-panel mt-6 flex flex-wrap items-center gap-4 p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Stethoscope className="size-4 text-primary" />
+          Live availability
+        </div>
+        <Select
+          value={vet.current_status}
+          onValueChange={(v) => statusMutation.mutate(v as Enums<"vet_status">)}
+        >
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(VET_STATUS_META) as Enums<"vet_status">[]).map((s) => (
+              <SelectItem key={s} value={s}>
+                {VET_STATUS_META[s].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-sm text-muted-foreground">
+          {pending.length} pending request{pending.length === 1 ? "" : "s"}
+        </p>
+      </div>
+
+      <div className="surface-panel mt-6 p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          {vet.verification === "VERIFIED" ? (
+            <BadgeCheck className="size-4 text-available" />
+          ) : (
+            <ShieldAlert className="size-4 text-busy" />
+          )}
+          Verification
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              vet.verification === "VERIFIED"
+                ? "bg-available/15 text-available"
+                : vet.verification === "PENDING"
+                  ? "bg-busy/15 text-busy"
+                  : "bg-destructive/15 text-destructive"
+            }`}
+          >
+            {vet.verification === "VERIFIED"
+              ? "Verified"
+              : vet.verification === "PENDING"
+                ? "Under review"
+                : "Not verified"}
+          </span>
+        </div>
+
+        {vet.verification === "VERIFIED" ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your profile is verified and shows a badge to pet owners.
+          </p>
+        ) : vet.verification === "PENDING" ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            We received your details and are reviewing them. You'll get a Verified badge once
+            approved.
+          </p>
+        ) : (
+          <form
+            className="mt-4 grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              verificationMutation.mutate();
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              Submit your veterinary council registration to get a Verified badge. Verified vets
+              rank higher and build more trust with pet owners.
+            </p>
+            <div className="grid gap-1.5">
+              <Label htmlFor="reg-number">Registration number</Label>
+              <Input
+                id="reg-number"
+                value={regNumber}
+                onChange={(e) => setRegNumber(e.target.value)}
+                placeholder="e.g. VCI/2014/01234"
+                required
+                minLength={3}
+                maxLength={60}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="verif-notes">Notes for our review team</Label>
+              <Textarea
+                id="verif-notes"
+                value={verifNotes}
+                onChange={(e) => setVerifNotes(e.target.value)}
+                placeholder="Your college, degree year, clinic address, or anything that helps us verify you."
+                required
+                minLength={10}
+                maxLength={1000}
+                rows={3}
+              />
+            </div>
+            <div>
+              <Button type="submit" size="sm" disabled={verificationMutation.isPending}>
+                {verificationMutation.isPending ? "Submitting…" : "Submit for verification"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <form
+        className="surface-panel mt-6 p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          hoursMutation.mutate();
+        }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold">Working hours</p>
+          <Button type="submit" size="sm" variant="outline" disabled={hoursMutation.isPending}>
+            {hoursMutation.isPending ? "Saving…" : "Save hours"}
+          </Button>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Pet owners pick a time slot from these hours when they book you.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {hours.map((h, idx) => (
+            <div key={h.dayOfWeek} className="rounded-lg border border-border p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={h.enabled}
+                  onCheckedChange={(v) =>
+                    setHours(hours.map((x, i) => (i === idx ? { ...x, enabled: v === true } : x)))
+                  }
+                />
+                {DAY_NAMES[h.dayOfWeek]}
+              </label>
+              {h.enabled ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    type="time"
+                    aria-label={`${DAY_NAMES[h.dayOfWeek]} opens`}
+                    value={h.opens}
+                    onChange={(e) =>
+                      setHours(hours.map((x, i) => (i === idx ? { ...x, opens: e.target.value } : x)))
+                    }
+                    className="h-9"
+                  />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <Input
+                    type="time"
+                    aria-label={`${DAY_NAMES[h.dayOfWeek]} closes`}
+                    value={h.closes}
+                    onChange={(e) =>
+                      setHours(hours.map((x, i) => (i === idx ? { ...x, closes: e.target.value } : x)))
+                    }
+                    className="h-9"
+                  />
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Closed</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </form>
+
+      <div className="mt-8 space-y-4">
+        {appointments.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading requests…</p>
+        ) : rows.length === 0 ? (
+          <div className="surface-panel p-8 text-center">
+            <p className="font-display text-lg font-bold">No requests yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Set yourself to Available so pet owners nearby can reach you.
+            </p>
+          </div>
+        ) : (
+          rows.map((a) => {
+            const meta = APPOINTMENT_STATUS_META[a.status];
+            return (
+              <div key={a.id} className="surface-panel p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-display text-lg font-bold">
+                      {a.ownerName ?? "Pet owner"}
+                      {a.pet ? ` · ${a.pet.name} (${speciesLabel(a.pet.species)})` : ""}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDateTime(a.scheduled_at)} · {consultationLabel(a.consultation_type)} ·{" "}
+                      {formatFee(a.price ?? 0)}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}>
+                    {meta.label}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-sm">{a.reason}</p>
+                {a.handoff_summary ? (
+                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-secondary p-3 font-mono text-xs text-muted-foreground">
+                    {a.handoff_summary}
+                  </pre>
+                ) : null}
+                {a.pet ? (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {[
+                      a.pet.breed,
+                      a.pet.weight_kg ? `${a.pet.weight_kg} kg` : null,
+                      a.pet.allergies ? `Allergies: ${a.pet.allergies}` : null,
+                      a.pet.conditions ? `Conditions: ${a.pet.conditions}` : null,
+                      a.pet.medications ? `Medications: ${a.pet.medications}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+                  {a.status === "PENDING" ? (
+                    <>
+                      <Button
+                        size="sm"
+                        disabled={apptMutation.isPending}
+                        onClick={() => apptMutation.mutate({ id: a.id, status: "CONFIRMED" })}
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={apptMutation.isPending}
+                        onClick={() => apptMutation.mutate({ id: a.id, status: "DECLINED" })}
+                      >
+                        Decline
+                      </Button>
+                    </>
+                  ) : null}
+                  {a.status === "CONFIRMED" ? (
+                    <Button
+                      size="sm"
+                      disabled={apptMutation.isPending}
+                      onClick={() => apptMutation.mutate({ id: a.id, status: "COMPLETED" })}
+                    >
+                      Mark completed
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
