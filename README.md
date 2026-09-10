@@ -1,29 +1,65 @@
-# Welcome to your Lovable project
+# VetNow
 
-This project was built with [Lovable](https://lovable.dev).
+Live veterinary availability and booking for Visakhapatnam. Pet owners can see
+which vets are available right now, get an AI-structured triage of their concern,
+and book a clinic, video, or home consultation.
 
-## Build with Lovable
+## Stack
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- [TanStack Start](https://tanstack.com/start) + React 19
+- TypeScript, Tailwind CSS v4, shadcn/ui
+- Supabase (Postgres, Auth, Row Level Security)
+- Vite
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Requires Node.js 20+ and npm.
 
 ```sh
 git clone <this-repository-url>
 cd <repository-name>
-npm i
+npm install
 npm run dev
 ```
 
-## Built with
+## Scripts
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+| Command           | Description                     |
+| ----------------- | ------------------------------- |
+| `npm run dev`     | Start the dev server            |
+| `npm run build`   | Production build                |
+| `npm run preview` | Preview the production build    |
+| `npm run start`   | Run the built server (Nitro)    |
+| `npm run lint`    | Run ESLint                      |
+| `npm run format`  | Format with Prettier            |
+
+## Environment
+
+Copy `.env` and set the credentials for your services:
+
+```
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+
+# OpenAI-compatible gateway for the VetNow assistant (e.g. OpenRouter)
+AI_GATEWAY_BASE_URL=https://openrouter.ai/api/v1
+AI_GATEWAY_API_KEY=
+AI_GATEWAY_MODEL=google/gemini-2.5-flash
+```
+
+Database schema and Row Level Security policies live in `supabase/migrations`.
+The AI assistant uses an OpenAI-compatible gateway configured via environment
+variables (see `src/lib/ai-gateway.server.ts`).
+
+## Deploying on Railway
+
+The build targets Nitro's `node-server` preset, so the repo is ready for
+Railway: build with `npm run build`, start with `npm run start`
+(`node .output/server/index.mjs`). The `railway.toml` in this repo sets this up.
+The database/backend is self-hosted Supabase on Railway (Postgres, Auth,
+PostgREST, Studio); point the `SUPABASE_*` variables at it and apply
+`supabase/migrations` to the new database.

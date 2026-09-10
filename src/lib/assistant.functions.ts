@@ -49,11 +49,11 @@ function gatewayError(status: number, message: string): Error {
   }
   if (status === 402) {
     return new Error(
-      "AI credits for this workspace have run out. The app owner needs to add credits to re-enable the assistant.",
+      "AI credits have run out. Add credits to your provider account to re-enable the assistant.",
     );
   }
   if (status === 403) {
-    return new Error("The AI assistant is currently disabled for this workspace.");
+    return new Error("The AI assistant is currently disabled for this account.");
   }
   return new Error(message || "The assistant could not process that request.");
 }
@@ -77,10 +77,10 @@ export const triageCase = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }): Promise<TriageResult> => {
-    const apiKey = process.env["LOVABLE_API_KEY"];
+    const apiKey = process.env["AI_GATEWAY_API_KEY"];
     if (!apiKey) throw new Error("The AI assistant is not configured.");
 
-    const { createLovableAiGatewayProvider } = await import("./ai-gateway.server");
+    const { createAiGatewayProvider, aiGatewayModel } = await import("./ai-gateway.server");
     const { streamText, Output } = await import("ai");
 
     const facts = [
@@ -95,11 +95,11 @@ export const triageCase = createServerFn({ method: "POST" })
       `Duration of the problem: ${data.durationText || "not reported"}`,
     ].join("\n");
 
-    const gateway = createLovableAiGatewayProvider(apiKey);
+    const gateway = createAiGatewayProvider();
 
     try {
       const result = streamText({
-        model: gateway("google/gemini-3.7-flash"),
+        model: gateway(aiGatewayModel()),
         system: SYSTEM_PROMPT,
         output: Output.object({ schema: TriageSchema }),
         prompt: `Pet record:\n${facts}\n\nOwner's description of the problem:\n"""${data.description}"""`,
