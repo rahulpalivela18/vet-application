@@ -15,6 +15,8 @@ import { SiteHeader } from "@/components/vetnow/site-header";
 import { SiteFooter } from "@/components/vetnow/site-footer";
 import { Toaster } from "@/components/ui/sonner";
 
+const SITE_URL = "https://vet-connect.up.railway.app";
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-[70vh] items-center justify-center bg-background px-4">
@@ -87,7 +89,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "See which veterinarians are available right now, get AI-structured care requests, and book clinic, video or home consults in Visakhapatnam.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "VetNow" },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: `${SITE_URL}/og-image.png` },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      {
+        property: "og:image:alt",
+        content: "VetNow — live vet availability in Visakhapatnam",
+      },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: `${SITE_URL}/og-image.png` },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -97,7 +109,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Public+Sans:wght@400;500;600&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
   }),
   shellComponent: RootShell,
