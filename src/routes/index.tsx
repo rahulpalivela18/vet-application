@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 const statsQuery = queryOptions({
   queryKey: ["availability-stats"],
   queryFn: () => getAvailabilityStats(),
-  refetchInterval: 60_000,
+  refetchInterval: 30_000,
 });
 
 const availableVetsQuery = queryOptions({
@@ -61,8 +61,8 @@ function Home() {
               <span className="text-primary">Someone nearby isn't.</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg text-muted-foreground">
-              VetNow shows which veterinarians are actually available right now — not just who has
-              a listing. Describe the problem once, and our assistant turns it into a clear clinical
+              VetNow shows which veterinarians are actually available right now — not just who has a
+              listing. Describe the problem once, and our assistant turns it into a clear clinical
               handoff before you even reach the clinic.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -72,7 +72,12 @@ function Home() {
                   Find an available vet
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="border-emergency/40 text-emergency hover:bg-emergency-soft hover:text-emergency">
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="border-emergency/40 text-emergency hover:bg-emergency-soft hover:text-emergency"
+              >
                 <Link to="/emergency">
                   <Siren className="size-4" />
                   Emergency now
@@ -145,7 +150,7 @@ function LiveStats() {
   const { data } = useSuspenseQuery(statsQuery);
   const items = [
     { label: "Available now", value: data.available, tone: "text-available" },
-    { label: "Emergency ready", value: data.emergencyOnly, tone: "text-emergency" },
+    { label: "Emergency ready", value: data.emergencyReady, tone: "text-emergency" },
     { label: "Busy", value: data.busy, tone: "text-busy-foreground" },
     { label: "Offline", value: data.offline, tone: "text-muted-foreground" },
   ];

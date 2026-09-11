@@ -122,14 +122,17 @@ export const getAvailabilityStats = createServerFn({ method: "GET" }).handler(
   async (): Promise<{
     total: number;
     available: number;
-    emergencyOnly: number;
+    emergencyReady: number;
     busy: number;
     offline: number;
     emergencyClinics: number;
   }> => {
     const supabase = createPublicSupabase();
     const [{ data: vets }, { data: clinics }] = await Promise.all([
-      supabase.from("vets").select("current_status").eq("verification", "VERIFIED"),
+      supabase
+        .from("vets")
+        .select("current_status, accepts_emergency")
+        .eq("verification", "VERIFIED"),
       supabase.from("clinics").select("is_24x7, is_emergency"),
     ]);
     const rows = vets ?? [];
@@ -137,7 +140,11 @@ export const getAvailabilityStats = createServerFn({ method: "GET" }).handler(
     return {
       total: rows.length,
       available: count("AVAILABLE"),
-      emergencyOnly: count("EMERGENCY_ONLY"),
+      emergencyReady: rows.filter(
+        (v) =>
+          v.accepts_emergency &&
+          (v.current_status === "AVAILABLE" || v.current_status === "EMERGENCY_ONLY"),
+      ).length,
       busy: count("BUSY"),
       offline: count("OFFLINE"),
       emergencyClinics: (clinics ?? []).filter((c) => c.is_24x7 || c.is_emergency).length,
