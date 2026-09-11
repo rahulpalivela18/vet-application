@@ -94,9 +94,7 @@ function ForVetsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
-      <h1 className="font-display text-4xl font-extrabold tracking-tight">
-        Practice on VetNow
-      </h1>
+      <h1 className="font-display text-4xl font-extrabold tracking-tight">Practice on VetNow</h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
         Show pet owners when you're actually available, and receive requests that already contain
         the history, symptoms and duration you need.
@@ -104,9 +102,21 @@ function ForVetsPage() {
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {[
-          { icon: Clock, title: "Live status control", body: "Switch between Available, Busy, Emergency-only and Offline in one tap." },
-          { icon: Users, title: "Qualified requests", body: "Every request arrives with a structured clinical handoff note." },
-          { icon: BadgeCheck, title: "Verified profile", body: "Qualification, registration and reviews build owner trust." },
+          {
+            icon: Clock,
+            title: "Live status control",
+            body: "Switch between Available, Busy, Emergency-only and Offline in one tap.",
+          },
+          {
+            icon: Users,
+            title: "Qualified requests",
+            body: "Every request arrives with a structured clinical handoff note.",
+          },
+          {
+            icon: BadgeCheck,
+            title: "Verified profile",
+            body: "Qualification, registration and reviews build owner trust.",
+          },
         ].map((f) => (
           <div key={f.title} className="surface-panel p-5">
             <f.icon className="size-5 text-primary" />
@@ -124,7 +134,9 @@ function ForVetsPage() {
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <Button asChild>
-              <Link to="/auth" search={{ mode: "signup" }}>Create account</Link>
+              <Link to="/auth" search={{ mode: "signup" }}>
+                Create account
+              </Link>
             </Button>
             <Button asChild variant="outline">
               <Link to="/auth">I already have an account</Link>
@@ -159,25 +171,59 @@ function ForVetsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="name">Full name</Label>
-              <Input id="name" required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Dr. Ananya Rao" className="mt-1.5" />
+              <Input
+                id="name"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Dr. Ananya Rao"
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label htmlFor="qual">Qualification</Label>
-              <Input id="qual" required value={qualification} onChange={(e) => setQualification(e.target.value)} placeholder="BVSc &amp; AH, MVSc" className="mt-1.5" />
+              <Input
+                id="qual"
+                required
+                value={qualification}
+                onChange={(e) => setQualification(e.target.value)}
+                placeholder="BVSc &amp; AH, MVSc"
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label htmlFor="reg">Registration number (optional)</Label>
-              <Input id="reg" value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value)} className="mt-1.5" />
+              <Input
+                id="reg"
+                value={registrationNumber}
+                onChange={(e) => setRegistrationNumber(e.target.value)}
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label htmlFor="exp">Years of experience</Label>
-              <Input id="exp" type="number" min={0} max={60} required value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} className="mt-1.5" />
+              <Input
+                id="exp"
+                type="number"
+                min={0}
+                max={60}
+                required
+                value={experienceYears}
+                onChange={(e) => setExperienceYears(e.target.value)}
+                className="mt-1.5"
+              />
             </div>
           </div>
 
           <div>
             <Label htmlFor="spec">Specialties (comma separated)</Label>
-            <Input id="spec" required value={specialties} onChange={(e) => setSpecialties(e.target.value)} className="mt-1.5" />
+            <Input
+              id="spec"
+              required
+              value={specialties}
+              onChange={(e) => setSpecialties(e.target.value)}
+              className="mt-1.5"
+            />
           </div>
 
           <div>
@@ -213,25 +259,54 @@ function ForVetsPage() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <Label htmlFor="fee">Consultation fee (₹)</Label>
-              <Input id="fee" type="number" min={0} required value={consultationFee} onChange={(e) => setConsultationFee(e.target.value)} className="mt-1.5" />
+              <Input
+                id="fee"
+                type="number"
+                min={0}
+                required
+                value={consultationFee}
+                onChange={(e) => setConsultationFee(e.target.value)}
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label htmlFor="hfee">Home visit fee (₹)</Label>
-              <Input id="hfee" type="number" min={0} value={homeVisitFee} onChange={(e) => setHomeVisitFee(e.target.value)} className="mt-1.5" />
+              <Input
+                id="hfee"
+                type="number"
+                min={0}
+                value={homeVisitFee}
+                onChange={(e) => setHomeVisitFee(e.target.value)}
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label htmlFor="phone">Phone (optional)</Label>
-              <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1.5" />
+              <Input
+                id="phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="mt-1.5"
+              />
             </div>
           </div>
 
           <div>
             <Label htmlFor="bio">About your practice (optional)</Label>
-            <Textarea id="bio" rows={4} value={bio} onChange={(e) => setBio(e.target.value)} className="mt-1.5" />
+            <Textarea
+              id="bio"
+              rows={4}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              className="mt-1.5"
+            />
           </div>
 
           <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={acceptsEmergency} onCheckedChange={(v) => setAcceptsEmergency(v === true)} />
+            <Checkbox
+              checked={acceptsEmergency}
+              onCheckedChange={(v) => setAcceptsEmergency(v === true)}
+            />
             I accept emergency cases
           </label>
 
@@ -239,7 +314,8 @@ function ForVetsPage() {
             {mutation.isPending ? "Creating…" : "Create vet profile"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Profiles start as pending verification. You can go live immediately from the vet console.
+            Profiles are reviewed before going live. Add your council registration and ID proof from
+            the vet console; an admin approves them.
           </p>
         </form>
       )}

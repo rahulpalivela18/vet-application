@@ -20,6 +20,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedVetConsoleRouteImport } from './routes/_authenticated/vet-console'
 import { Route as BookVetIdRouteImport } from './routes/book.$vetId'
 import { Route as VetsVetIdRouteImport } from './routes/vets.$vetId'
+import { Route as AuthenticatedAdminVerificationsRouteImport } from './routes/_authenticated/admin.verifications'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -75,6 +76,12 @@ const VetsVetIdRoute = VetsVetIdRouteImport.update({
   path: '/vets/$vetId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminVerificationsRoute =
+  AuthenticatedAdminVerificationsRouteImport.update({
+    id: '/admin/verifications',
+    path: '/admin/verifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/vet-console': typeof AuthenticatedVetConsoleRoute
   '/book/$vetId': typeof BookVetIdRoute
   '/vets/$vetId': typeof VetsVetIdRoute
+  '/admin/verifications': typeof AuthenticatedAdminVerificationsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -99,6 +107,7 @@ export interface FileRoutesByTo {
   '/vet-console': typeof AuthenticatedVetConsoleRoute
   '/book/$vetId': typeof BookVetIdRoute
   '/vets/$vetId': typeof VetsVetIdRoute
+  '/admin/verifications': typeof AuthenticatedAdminVerificationsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -113,6 +122,7 @@ export interface FileRoutesById {
   '/_authenticated/vet-console': typeof AuthenticatedVetConsoleRoute
   '/book/$vetId': typeof BookVetIdRoute
   '/vets/$vetId': typeof VetsVetIdRoute
+  '/_authenticated/admin/verifications': typeof AuthenticatedAdminVerificationsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/vet-console'
     | '/book/$vetId'
     | '/vets/$vetId'
+    | '/admin/verifications'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/vet-console'
     | '/book/$vetId'
     | '/vets/$vetId'
+    | '/admin/verifications'
   id:
     | '__root__'
     | '/'
@@ -152,6 +164,7 @@ export interface FileRouteTypes {
     | '/_authenticated/vet-console'
     | '/book/$vetId'
     | '/vets/$vetId'
+    | '/_authenticated/admin/verifications'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -245,17 +258,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VetsVetIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/verifications': {
+      id: '/_authenticated/admin/verifications'
+      path: '/admin/verifications'
+      fullPath: '/admin/verifications'
+      preLoaderRoute: typeof AuthenticatedAdminVerificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedVetConsoleRoute: typeof AuthenticatedVetConsoleRoute
+  AuthenticatedAdminVerificationsRoute: typeof AuthenticatedAdminVerificationsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedVetConsoleRoute: AuthenticatedVetConsoleRoute,
+  AuthenticatedAdminVerificationsRoute: AuthenticatedAdminVerificationsRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

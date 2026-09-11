@@ -8,9 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { listVetAppointments, setAppointmentStatus } from "@/lib/appointments.functions";
-import { getMyAccount, submitVetVerification, updateVetStatus } from "@/lib/account.functions";
+import {
+  getMyAccount,
+  getMyVetDocuments,
+  submitVetVerification,
+  updateVetStatus,
+  VET_DOC_KINDS,
+  type VetDocKind,
+} from "@/lib/account.functions";
 import { listMyWorkingHours, saveMyWorkingHours } from "@/lib/vet-hours.functions";
 import { StatusBadge } from "@/components/vetnow/status-badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/hooks/use-session";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -33,6 +42,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+const DOC_FIELDS: { kind: VetDocKind; label: string; required: boolean }[] = [
+  { kind: "degree", label: "BVSc & AH degree certificate", required: true },
+  { kind: "registration", label: "Veterinary council registration certificate", required: true },
+  { kind: "gov_id", label: "Government photo ID (Aadhaar / PAN / passport)", required: true },
+  { kind: "selfie", label: "Selfie holding your ID", required: true },
+  { kind: "clinic", label: "Clinic registration (optional)", required: false },
+];
+
 type DayHours = { dayOfWeek: number; opens: string; closes: string; enabled: boolean };
 
 const DEFAULT_HOURS: DayHours[] = DAY_NAMES.map((_, i) => ({
@@ -51,7 +68,10 @@ export const Route = createFileRoute("/_authenticated/vet-console")({
         content: "Set your live availability status and manage incoming consultation requests.",
       },
       { property: "og:title", content: "Vet console | VetNow" },
-      { property: "og:description", content: "Live status control and request queue for VetNow vets." },
+      {
+        property: "og:description",
+        content: "Live status control and request queue for VetNow vets.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -65,10 +85,17 @@ function VetConsolePage() {
   const setStatus = useServerFn(updateVetStatus);
   const setApptStatus = useServerFn(setAppointmentStatus);
   const submitVerification = useServerFn(submitVetVerification);
+  const fetchDocs = useServerFn(getMyVetDocuments);
   const fetchHours = useServerFn(listMyWorkingHours);
   const saveHours = useServerFn(saveMyWorkingHours);
+  const { user } = useSession();
 
   const account = useQuery({ queryKey: ["my-account"], queryFn: () => fetchAccount() });
+  const documentsQuery = useQuery({
+    queryKey: ["my-vet-documents"],
+    queryFn: () => fetchDocs(),
+    enabled: Boolean(account.data?.vet),
+  });
   const appointments = useQuery({
     queryKey: ["vet-appointments"],
     queryFn: () => fetchAppointments(),
@@ -96,6 +123,8 @@ function VetConsolePage() {
 
   const [regNumber, setRegNumber] = useState("");
   const [verifNotes, setVerifNotes] = useState("");
+  const [files, setFiles] = useState<Partial<Record<VetDocKind, File>>>({});
+  const [uploading, setUploading] = useState(false);
   const [hours, setHours] = useState<DayHours[]>(DEFAULT_HOURS);
   const [hoursLoaded, setHoursLoaded] = useState(false);
 
@@ -113,7 +142,12 @@ function VetConsolePage() {
         DAY_NAMES.map((_, i) => {
           const row = saved.find((r) => r.day_of_week === i);
           return row
-            ? { dayOfWeek: i, opens: row.opens.slice(0, 5), closes: row.closes.slice(0, 5), enabled: true }
+            ? {
+                dayOfWeek: i,
+                opens: row.opens.slice(0, 5),
+                closes: row.closes.slice(0, 5),
+                enabled: true,
+              }
             : { dayOfWeek: i, opens: "10:00", closes: "19:00", enabled: false };
         }),
       );
@@ -137,21 +171,61 @@ function VetConsolePage() {
   });
 
   const verificationMutation = useMutation({
-    mutationFn: () =>
-      submitVerification({
-        data: { registrationNumber: regNumber.trim(), notes: verifNotes.trim() },
-      }),
+    mutationFn: (payload: {
+      registrationNumber: string;
+      notes: string;
+      documents: { kind: VetDocKind; filePath: string }[];
+    }) => submitVerification({ data: payload }),
     onSuccess: () => {
       toast.success("Verification submitted — we'll review it shortly");
       setRegNumber("");
       setVerifNotes("");
+      setFiles({});
       qc.invalidateQueries({ queryKey: ["my-account"] });
+      qc.invalidateQueries({ queryKey: ["my-vet-documents"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
+  async function submitForVerification() {
+    if (!user) {
+      toast.error("Please sign in again");
+      return;
+    }
+    setUploading(true);
+    try {
+      const payloadDocs: { kind: VetDocKind; filePath: string }[] = [];
+      for (const kind of VET_DOC_KINDS) {
+        const file = files[kind];
+        if (!file) continue;
+        const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+        const filePath = `${user.id}/${kind}-${Date.now()}.${ext}`;
+        const { error } = await supabase.storage
+          .from("vet-documents")
+          .upload(filePath, file, { upsert: true, contentType: file.type });
+        if (error) throw new Error(error.message);
+        payloadDocs.push({ kind, filePath });
+      }
+      for (const doc of documentsQuery.data ?? []) {
+        if (payloadDocs.some((d) => d.kind === doc.kind)) continue;
+        payloadDocs.push({ kind: doc.kind as VetDocKind, filePath: doc.file_path });
+      }
+      await verificationMutation.mutateAsync({
+        registrationNumber: regNumber.trim(),
+        notes: verifNotes.trim(),
+        documents: payloadDocs,
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   if (account.isLoading) {
-    return <p className="mx-auto max-w-5xl px-4 py-16 text-sm text-muted-foreground">Loading console…</p>;
+    return (
+      <p className="mx-auto max-w-5xl px-4 py-16 text-sm text-muted-foreground">Loading console…</p>
+    );
   }
 
   const vet = account.data?.vet;
@@ -222,16 +296,18 @@ function VetConsolePage() {
             className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
               vet.verification === "VERIFIED"
                 ? "bg-available/15 text-available"
-                : vet.verification === "PENDING"
-                  ? "bg-busy/15 text-busy"
-                  : "bg-destructive/15 text-destructive"
+                : vet.verification === "REJECTED"
+                  ? "bg-destructive/15 text-destructive"
+                  : "bg-busy/15 text-busy"
             }`}
           >
             {vet.verification === "VERIFIED"
               ? "Verified"
-              : vet.verification === "PENDING"
-                ? "Under review"
-                : "Not verified"}
+              : vet.verification === "REJECTED"
+                ? "Not verified"
+                : vet.verification_submitted_at
+                  ? "Under review"
+                  : "Not submitted"}
           </span>
         </div>
 
@@ -239,22 +315,27 @@ function VetConsolePage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Your profile is verified and shows a badge to pet owners.
           </p>
-        ) : vet.verification === "PENDING" ? (
+        ) : vet.verification === "PENDING" && vet.verification_submitted_at ? (
           <p className="mt-2 text-sm text-muted-foreground">
-            We received your details and are reviewing them. You'll get a Verified badge once
-            approved.
+            We received your documents on {formatDateTime(vet.verification_submitted_at)} and are
+            reviewing them. You'll get a Verified badge once approved.
           </p>
         ) : (
           <form
             className="mt-4 grid gap-4"
             onSubmit={(e) => {
               e.preventDefault();
-              verificationMutation.mutate();
+              void submitForVerification();
             }}
           >
+            {vet.verification === "REJECTED" && vet.verification_reason ? (
+              <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                Rejected: {vet.verification_reason}
+              </p>
+            ) : null}
             <p className="text-sm text-muted-foreground">
-              Submit your veterinary council registration to get a Verified badge. Verified vets
-              rank higher and build more trust with pet owners.
+              Upload your veterinary council registration and identity proof. An admin reviews these
+              before you can go live.
             </p>
             <div className="grid gap-1.5">
               <Label htmlFor="reg-number">Registration number</Label>
@@ -267,6 +348,30 @@ function VetConsolePage() {
                 minLength={3}
                 maxLength={60}
               />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {DOC_FIELDS.map((f) => {
+                const uploaded = (documentsQuery.data ?? []).some((d) => d.kind === f.kind);
+                return (
+                  <div key={f.kind} className="grid gap-1.5">
+                    <Label htmlFor={`doc-${f.kind}`}>
+                      {f.label}
+                      {uploaded ? (
+                        <span className="ml-2 text-xs font-medium text-available">Uploaded</span>
+                      ) : null}
+                    </Label>
+                    <Input
+                      id={`doc-${f.kind}`}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      required={f.required && !uploaded}
+                      onChange={(e) =>
+                        setFiles((prev) => ({ ...prev, [f.kind]: e.target.files?.[0] }))
+                      }
+                    />
+                  </div>
+                );
+              })}
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="verif-notes">Notes for our review team</Label>
@@ -282,8 +387,14 @@ function VetConsolePage() {
               />
             </div>
             <div>
-              <Button type="submit" size="sm" disabled={verificationMutation.isPending}>
-                {verificationMutation.isPending ? "Submitting…" : "Submit for verification"}
+              <Button
+                type="submit"
+                size="sm"
+                disabled={uploading || verificationMutation.isPending}
+              >
+                {uploading || verificationMutation.isPending
+                  ? "Submitting…"
+                  : "Submit for verification"}
               </Button>
             </div>
           </form>
@@ -325,7 +436,9 @@ function VetConsolePage() {
                     aria-label={`${DAY_NAMES[h.dayOfWeek]} opens`}
                     value={h.opens}
                     onChange={(e) =>
-                      setHours(hours.map((x, i) => (i === idx ? { ...x, opens: e.target.value } : x)))
+                      setHours(
+                        hours.map((x, i) => (i === idx ? { ...x, opens: e.target.value } : x)),
+                      )
                     }
                     className="h-9"
                   />
@@ -335,7 +448,9 @@ function VetConsolePage() {
                     aria-label={`${DAY_NAMES[h.dayOfWeek]} closes`}
                     value={h.closes}
                     onChange={(e) =>
-                      setHours(hours.map((x, i) => (i === idx ? { ...x, closes: e.target.value } : x)))
+                      setHours(
+                        hours.map((x, i) => (i === idx ? { ...x, closes: e.target.value } : x)),
+                      )
                     }
                     className="h-9"
                   />
@@ -374,7 +489,9 @@ function VetConsolePage() {
                       {formatFee(a.price ?? 0)}
                     </p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}
+                  >
                     {meta.label}
                   </span>
                 </div>

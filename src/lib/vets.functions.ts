@@ -23,7 +23,8 @@ function sortByAvailability<T extends { current_status: VetStatus; rating: numbe
   rows: T[],
 ): T[] {
   return [...rows].sort((a, b) => {
-    const rankDiff = VET_STATUS_META[a.current_status].rank - VET_STATUS_META[b.current_status].rank;
+    const rankDiff =
+      VET_STATUS_META[a.current_status].rank - VET_STATUS_META[b.current_status].rank;
     if (rankDiff !== 0) return rankDiff;
     return (b.rating ?? 0) - (a.rating ?? 0);
   });
@@ -46,11 +47,12 @@ export const listVets = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }): Promise<VetWithClinic[]> => {
     const supabase = createPublicSupabase();
-    let query = supabase.from("vets").select("*, clinic:clinics(*)");
+    let query = supabase.from("vets").select("*, clinic:clinics(*)").eq("verification", "VERIFIED");
 
     if (data.status) query = query.eq("current_status", data.status);
     if (data.petType) query = query.contains("pet_types", [data.petType]);
-    if (data.consultationType) query = query.contains("consultation_types", [data.consultationType]);
+    if (data.consultationType)
+      query = query.contains("consultation_types", [data.consultationType]);
     if (data.specialty) query = query.contains("specialties", [data.specialty]);
     if (data.maxFee) query = query.lte("consultation_fee", data.maxFee);
     if (data.emergency) {
@@ -93,12 +95,13 @@ export const getVetById = createServerFn({ method: "GET" })
     }> => {
       const supabase = createPublicSupabase();
       const [{ data: vet, error }, { data: hours }, { data: reviews }] = await Promise.all([
-        supabase.from("vets").select("*, clinic:clinics(*)").eq("id", data.id).maybeSingle(),
         supabase
-          .from("vet_working_hours")
-          .select("*")
-          .eq("vet_id", data.id)
-          .order("day_of_week"),
+          .from("vets")
+          .select("*, clinic:clinics(*)")
+          .eq("id", data.id)
+          .eq("verification", "VERIFIED")
+          .maybeSingle(),
+        supabase.from("vet_working_hours").select("*").eq("vet_id", data.id).order("day_of_week"),
         supabase
           .from("reviews")
           .select("*")
@@ -126,7 +129,7 @@ export const getAvailabilityStats = createServerFn({ method: "GET" }).handler(
   }> => {
     const supabase = createPublicSupabase();
     const [{ data: vets }, { data: clinics }] = await Promise.all([
-      supabase.from("vets").select("current_status"),
+      supabase.from("vets").select("current_status").eq("verification", "VERIFIED"),
       supabase.from("clinics").select("is_24x7, is_emergency"),
     ]);
     const rows = vets ?? [];
@@ -149,13 +152,10 @@ export const listEmergencyOptions = createServerFn({ method: "GET" }).handler(
       supabase
         .from("vets")
         .select("*, clinic:clinics(*)")
+        .eq("verification", "VERIFIED")
         .eq("accepts_emergency", true)
         .in("current_status", ["AVAILABLE", "EMERGENCY_ONLY"]),
-      supabase
-        .from("clinics")
-        .select("*")
-        .or("is_emergency.eq.true,is_24x7.eq.true")
-        .order("name"),
+      supabase.from("clinics").select("*").or("is_emergency.eq.true,is_24x7.eq.true").order("name"),
     ]);
     if (error) throw new Error(error.message);
     return {
