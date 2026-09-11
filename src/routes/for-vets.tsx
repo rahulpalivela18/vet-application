@@ -55,7 +55,8 @@ function ForVetsPage() {
   const [specialtyDraft, setSpecialtyDraft] = useState("");
   const [petTypes, setPetTypes] = useState<Species[]>(["dog", "cat"]);
   const [showOther, setShowOther] = useState(false);
-  const [otherPetType, setOtherPetType] = useState("");
+  const [otherPetTypes, setOtherPetTypes] = useState<string[]>([]);
+  const [otherPetDraft, setOtherPetDraft] = useState("");
   const [consultationTypes, setConsultationTypes] = useState<Consultation[]>(["clinic"]);
   const [consultationFee, setConsultationFee] = useState("500");
   const [homeVisitFee, setHomeVisitFee] = useState("");
@@ -68,10 +69,10 @@ function ForVetsPage() {
       const finalSpecialties = specialtyDraft.trim()
         ? [...specialties, specialtyDraft.trim()]
         : specialties;
-      const finalPetTypes = [
-        ...petTypes,
-        ...(showOther && otherPetType.trim() ? [otherPetType.trim()] : []),
-      ];
+      const finalOtherPets = otherPetDraft.trim()
+        ? [...otherPetTypes, otherPetDraft.trim()]
+        : otherPetTypes;
+      const finalPetTypes = [...petTypes, ...(showOther ? finalOtherPets : [])];
       return create({
         data: {
           fullName: fullName.trim(),
@@ -115,6 +116,23 @@ function ForVetsPage() {
 
   function removeSpecialty(value: string) {
     setSpecialties(specialties.filter((s) => s !== value));
+  }
+
+  function addOtherPet(raw: string) {
+    const value = raw.trim();
+    if (!value) return;
+    if (petTypes.length + otherPetTypes.length >= 12) {
+      toast.error("Maximum 12 pet types");
+      return;
+    }
+    if (!otherPetTypes.some((s) => s.toLowerCase() === value.toLowerCase())) {
+      setOtherPetTypes([...otherPetTypes, value]);
+    }
+    setOtherPetDraft("");
+  }
+
+  function removeOtherPet(value: string) {
+    setOtherPetTypes(otherPetTypes.filter((s) => s !== value));
   }
 
   return (
@@ -180,13 +198,15 @@ function ForVetsPage() {
           className="surface-panel mt-8 space-y-5 p-6"
           onSubmit={(e) => {
             e.preventDefault();
-            const hasOther = showOther && otherPetType.trim().length > 0;
-            if (petTypes.length === 0 && !hasOther) {
+            const otherFinal = otherPetDraft.trim()
+              ? [...otherPetTypes, otherPetDraft.trim()]
+              : otherPetTypes;
+            if (petTypes.length === 0 && (!showOther || otherFinal.length === 0)) {
               toast.error("Select at least one pet type");
               return;
             }
-            if (showOther && !otherPetType.trim()) {
-              toast.error("Enter the other pet type");
+            if (showOther && otherFinal.length === 0) {
+              toast.error("Add at least one other pet type");
               return;
             }
             if (specialties.length === 0 && !specialtyDraft.trim()) {
@@ -322,14 +342,51 @@ function ForVetsPage() {
               </label>
             </div>
             {showOther ? (
-              <Input
-                aria-label="Other pet type"
-                value={otherPetType}
-                onChange={(e) => setOtherPetType(e.target.value)}
-                placeholder="e.g. Horse, Guinea pig"
-                maxLength={40}
-                className="mt-2"
-              />
+              <div className="mt-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {otherPetTypes.map((s) => (
+                    <span
+                      key={s}
+                      className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground"
+                    >
+                      {s}
+                      <button
+                        type="button"
+                        onClick={() => removeOtherPet(s)}
+                        aria-label={`Remove ${s}`}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <Input
+                    aria-label="Other pet type"
+                    value={otherPetDraft}
+                    onChange={(e) => setOtherPetDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addOtherPet(otherPetDraft);
+                      }
+                    }}
+                    onBlur={() => addOtherPet(otherPetDraft)}
+                    placeholder="e.g. Horse, then add Guinea pig"
+                    maxLength={40}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addOtherPet(otherPetDraft)}
+                  >
+                    <Plus className="size-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
             ) : null}
           </div>
 
