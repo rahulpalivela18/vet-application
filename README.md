@@ -101,10 +101,10 @@ npm run lint       # ESLint (repo has pre-existing Prettier drift — untouched 
 
 ## Database migrations
 
-Migrations live in `supabase/migrations/` and are applied by the Supabase CLI
-(dev) and the native Supabase GitHub integration (prod). Nothing is pasted into
-the dashboard SQL editor anymore, and the remote `supabase_migrations.schema_migrations`
-table records exactly what has run.
+Migrations live in `supabase/migrations/`. Apply to **dev** with the Supabase CLI.
+Apply to **prod manually and verify** — the native GitHub integration is broken for
+this project (details below). The remote `supabase_migrations.schema_migrations`
+table records what has run, but it has lied before: always confirm the objects exist.
 
 ### One-time setup (local, for dev)
 
@@ -133,25 +133,41 @@ supabase db push                       # applies pending migrations to vetnow-de
 
 Commit the new file. Never edit an already-applied migration — add a new one.
 
-### Prod (automated)
+### Prod — apply by hand (GitHub integration is BROKEN)
 
-In the Supabase dashboard for the `vetnow` project: **Project Settings →
-Integrations → GitHub**, connect `rahulpalivela18/vet-application`, point the
-working directory at the repo root (where `supabase/` lives), and enable deploy
-on push for `main`. After that, any migration merged to `main` is applied to prod
-automatically.
+**Do NOT rely on the native Supabase GitHub integration for prod.** It does not read
+the remote migration history, so it replays from `20260825055814` and fails every run
+with `type "app_role" already exists (SQLSTATE 42710)`. It has also **recorded a
+migration version without applying its DDL**, leaving history and schema out of sync.
 
-**Baseline prod first (once).** Because prod was also seeded by hand, its history
-is empty and the integration would try to re-run all 5 files. Repair prod the
-same way before enabling the integration:
+- Keep **Deploy to production OFF** (Project Settings → Integrations → GitHub) so it
+  stops spamming failures. (Preview branching is Pro-only; ignore it.)
+- If prod history and schema ever disagree, trust the schema: run the SQL and verify.
 
-```sh
-supabase link --project-ref gsisrnnkasxwvtttwefp   # vetnow (prod) — baseline only
-# run the same migration repair loop as above
-supabase link --project-ref oiyqysoaqmzzgyigoclt   # relink back to dev
-```
+**Apply a migration to prod:**
 
-Only the migration-history table is written during repair — no schema changes.
+1. Open `supabase/migrations/<ts>_<name>.sql` and paste the whole file into the prod
+   SQL editor and run it (files here are written idempotent: `add column if not exists`,
+   `create table if not exists`, `drop policy if exists`, `on conflict do nothing`).
+   Alternatively run it via the Supabase Management API.
+2. If the version isn't recorded yet, mark it applied (and relink dev after):
+   ```sh
+   supabase link --project-ref gsisrnnkasxwvtttwefp     # vetnow (prod)
+   supabase migration repair --status applied <version>
+   supabase link --project-ref oiyqysoaqmzzgyigoclt     # back to dev
+   ```
+3. **Verify, never trust the success message** — the CLI has printed `Finished`
+   without the DDL landing. Confirm directly:
+   ```sql
+   select to_regclass('public.vet_documents');                 -- table exists
+   select count(*) from information_schema.columns
+     where table_schema = 'public' and table_name = 'vets'
+       and column_name = 'verification_reason';                -- column exists
+   ```
+
+Prod `schema_migrations` was baselined (migration repair) for the 5 original files;
+`20260911143617_vet_verification` was applied by hand because the integration recorded
+it without applying it.
 
 ## Railway deployment notes (gotchas already hit)
 
@@ -185,9 +201,10 @@ Only the migration-history table is written during repair — no schema changes.
 - **Build retargeted** from Cloudflare Workers to Node (`nitro({ preset:
 "node-server" })`, custom `vite.config.ts`) for Railway.
 - **AI provider**: OpenRouter chosen but not yet wired with a key.
-- **Migrations moved off the SQL editor**: Supabase CLI tracks applied migrations
-  (`supabase_migrations.schema_migrations`) on dev; the native GitHub integration
-  auto-applies them to prod on push to `main`.
+- **Migrations**: Supabase CLI on dev; prod is applied **by hand and verified**,
+  because the native GitHub integration is broken (replays from migration #1, and has
+  recorded versions without applying their DDL). See
+  [Database migrations](#database-migrations).
 
 ## Pending / known gaps
 
@@ -197,11 +214,14 @@ Only the migration-history table is written during repair — no schema changes.
   test the assistant end-to-end.
 - **Repo-wide `npm run lint` reports pre-existing Prettier drift** in untouched
   files. Format on touch (`npx prettier --write <file>`) rather than one big reformat.
+- **Prod migrations are manual.** The GitHub integration is unusable (see
+  [Database migrations](#database-migrations)): keep **Deploy to production OFF** and
+  apply + verify each migration by hand.
 
 ### Verified working
 
 - Railway prod deploy (`vet-connect.up.railway.app`) is green on Node 24, 1 replica,
   US West — `GET /healthz` → `200`, `/` and `/find` → `200`.
 - Google OAuth click-through works on the live URL.
-- Migrations baselined on both projects (`supabase migration list` shows local =
-  remote for all 5) and the prod GitHub integration is enabled.
+- Migrations baselined on both projects; `vet_documents` + verification columns
+  applied to prod and verified (table, columns, bucket, policies).
