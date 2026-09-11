@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Stethoscope, BadgeCheck, ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -125,6 +125,7 @@ function VetConsolePage() {
   const [verifNotes, setVerifNotes] = useState("");
   const [files, setFiles] = useState<Partial<Record<VetDocKind, File>>>({});
   const [uploading, setUploading] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [hours, setHours] = useState<DayHours[]>(DEFAULT_HOURS);
   const [hoursLoaded, setHoursLoaded] = useState(false);
 
@@ -246,6 +247,8 @@ function VetConsolePage() {
 
   const rows = appointments.data ?? [];
   const pending = rows.filter((a) => a.status === "PENDING");
+  const confirmed = rows.filter((a) => a.status === "CONFIRMED");
+  const completed = rows.filter((a) => a.status === "COMPLETED");
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
@@ -461,93 +464,151 @@ function VetConsolePage() {
         </div>
       </form>
 
-      <div className="mt-8 space-y-4">
-        {appointments.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading requests…</p>
-        ) : rows.length === 0 ? (
-          <div className="surface-panel p-8 text-center">
-            <p className="font-display text-lg font-bold">No requests yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Set yourself to Available so pet owners nearby can reach you.
-            </p>
-          </div>
-        ) : (
-          rows.map((a) => {
-            const meta = APPOINTMENT_STATUS_META[a.status];
-            return (
-              <div key={a.id} className="surface-panel p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-display text-lg font-bold">
-                      {a.ownerName ?? "Pet owner"}
-                      {a.pet ? ` · ${a.pet.name} (${speciesLabel(a.pet.species)})` : ""}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatDateTime(a.scheduled_at)} · {consultationLabel(a.consultation_type)} ·{" "}
-                      {formatFee(a.price ?? 0)}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}
-                  >
-                    {meta.label}
-                  </span>
-                </div>
+      <div className="mt-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Pending", value: pending.length },
+            { label: "Confirmed", value: confirmed.length },
+            { label: "Completed", value: completed.length },
+            { label: "Total", value: rows.length },
+          ].map((s) => (
+            <div key={s.label} className="surface-panel p-4">
+              <p className="font-display text-2xl font-extrabold">{s.value}</p>
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
 
-                <p className="mt-3 text-sm">{a.reason}</p>
-                {a.handoff_summary ? (
-                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-secondary p-3 font-mono text-xs text-muted-foreground">
-                    {a.handoff_summary}
-                  </pre>
-                ) : null}
-                {a.pet ? (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {[
-                      a.pet.breed,
-                      a.pet.weight_kg ? `${a.pet.weight_kg} kg` : null,
-                      a.pet.allergies ? `Allergies: ${a.pet.allergies}` : null,
-                      a.pet.conditions ? `Conditions: ${a.pet.conditions}` : null,
-                      a.pet.medications ? `Medications: ${a.pet.medications}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                ) : null}
-
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
-                  {a.status === "PENDING" ? (
-                    <>
-                      <Button
-                        size="sm"
-                        disabled={apptMutation.isPending}
-                        onClick={() => apptMutation.mutate({ id: a.id, status: "CONFIRMED" })}
-                      >
-                        Confirm
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={apptMutation.isPending}
-                        onClick={() => apptMutation.mutate({ id: a.id, status: "DECLINED" })}
-                      >
-                        Decline
-                      </Button>
-                    </>
-                  ) : null}
-                  {a.status === "CONFIRMED" ? (
-                    <Button
-                      size="sm"
-                      disabled={apptMutation.isPending}
-                      onClick={() => apptMutation.mutate({ id: a.id, status: "COMPLETED" })}
-                    >
-                      Mark completed
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })
-        )}
+        <div className="surface-panel mt-6 overflow-x-auto">
+          {appointments.isLoading ? (
+            <p className="p-6 text-sm text-muted-foreground">Loading requests…</p>
+          ) : rows.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="font-display text-lg font-bold">No requests yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Set yourself to Available so pet owners nearby can reach you.
+              </p>
+            </div>
+          ) : (
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Patient</th>
+                  <th className="px-4 py-3 font-medium">Owner</th>
+                  <th className="px-4 py-3 font-medium">When</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Fee</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((a) => {
+                  const meta = APPOINTMENT_STATUS_META[a.status];
+                  const isOpen = expandedId === a.id;
+                  return (
+                    <Fragment key={a.id}>
+                      <tr className="border-b border-border align-top">
+                        <td className="px-4 py-3 font-medium">
+                          {a.pet ? `${a.pet.name} (${speciesLabel(a.pet.species)})` : "—"}
+                        </td>
+                        <td className="px-4 py-3">{a.ownerName ?? "Pet owner"}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {formatDateTime(a.scheduled_at)}
+                        </td>
+                        <td className="px-4 py-3">{consultationLabel(a.consultation_type)}</td>
+                        <td className="px-4 py-3">{formatFee(a.price ?? 0)}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${meta.badgeClass}`}
+                          >
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setExpandedId(isOpen ? null : a.id)}
+                            >
+                              {isOpen ? "Hide" : "Details"}
+                            </Button>
+                            {a.status === "PENDING" ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  disabled={apptMutation.isPending}
+                                  onClick={() =>
+                                    apptMutation.mutate({ id: a.id, status: "CONFIRMED" })
+                                  }
+                                >
+                                  Confirm
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={apptMutation.isPending}
+                                  onClick={() =>
+                                    apptMutation.mutate({ id: a.id, status: "DECLINED" })
+                                  }
+                                >
+                                  Decline
+                                </Button>
+                              </>
+                            ) : null}
+                            {a.status === "CONFIRMED" ? (
+                              <Button
+                                size="sm"
+                                disabled={apptMutation.isPending}
+                                onClick={() =>
+                                  apptMutation.mutate({ id: a.id, status: "COMPLETED" })
+                                }
+                              >
+                                Complete
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                      {isOpen ? (
+                        <tr className="border-b border-border bg-secondary/40">
+                          <td colSpan={7} className="px-4 py-4">
+                            <p className="text-xs font-medium text-muted-foreground">Reason</p>
+                            <p className="mt-1 text-sm">{a.reason}</p>
+                            {a.handoff_summary ? (
+                              <>
+                                <p className="mt-3 text-xs font-medium text-muted-foreground">
+                                  Handoff summary
+                                </p>
+                                <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-secondary p-3 font-mono text-xs text-muted-foreground">
+                                  {a.handoff_summary}
+                                </pre>
+                              </>
+                            ) : null}
+                            {a.pet ? (
+                              <p className="mt-3 text-xs text-muted-foreground">
+                                {[
+                                  a.pet.breed,
+                                  a.pet.weight_kg ? `${a.pet.weight_kg} kg` : null,
+                                  a.pet.allergies ? `Allergies: ${a.pet.allergies}` : null,
+                                  a.pet.conditions ? `Conditions: ${a.pet.conditions}` : null,
+                                  a.pet.medications ? `Medications: ${a.pet.medications}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );
