@@ -163,6 +163,18 @@ export const updateVetStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setVetAcceptsEmergency = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ accepts: z.boolean() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("vets")
+      .update({ accepts_emergency: data.accepts })
+      .eq("user_id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const getMyVetDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Tables<"vet_documents">[]> => {

@@ -11,6 +11,7 @@ import { listVetAppointments, setAppointmentStatus } from "@/lib/appointments.fu
 import {
   getMyAccount,
   getMyVetDocuments,
+  setVetAcceptsEmergency,
   submitVetVerification,
   updateVetStatus,
   VET_DOC_KINDS,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/account.functions";
 import { listMyWorkingHours, saveMyWorkingHours } from "@/lib/vet-hours.functions";
 import { StatusBadge } from "@/components/vetnow/status-badge";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/use-session";
 import { Button } from "@/components/ui/button";
@@ -83,6 +85,7 @@ function VetConsolePage() {
   const fetchAccount = useServerFn(getMyAccount);
   const fetchAppointments = useServerFn(listVetAppointments);
   const setStatus = useServerFn(updateVetStatus);
+  const setEmergency = useServerFn(setVetAcceptsEmergency);
   const setApptStatus = useServerFn(setAppointmentStatus);
   const submitVerification = useServerFn(submitVetVerification);
   const fetchDocs = useServerFn(getMyVetDocuments);
@@ -106,6 +109,15 @@ function VetConsolePage() {
     mutationFn: (status: Enums<"vet_status">) => setStatus({ data: { status } }),
     onSuccess: () => {
       toast.success("Availability updated");
+      qc.invalidateQueries({ queryKey: ["my-account"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const emergencyMutation = useMutation({
+    mutationFn: (accepts: boolean) => setEmergency({ data: { accepts } }),
+    onSuccess: () => {
+      toast.success("Emergency setting updated");
       qc.invalidateQueries({ queryKey: ["my-account"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -282,6 +294,14 @@ function VetConsolePage() {
             ))}
           </SelectContent>
         </Select>
+        <label className="flex items-center gap-2 text-sm">
+          <Switch
+            checked={vet.accepts_emergency}
+            disabled={emergencyMutation.isPending}
+            onCheckedChange={(v) => emergencyMutation.mutate(v)}
+          />
+          Accepting emergency cases
+        </label>
         <p className="text-sm text-muted-foreground">
           {pending.length} pending request{pending.length === 1 ? "" : "s"}
         </p>
