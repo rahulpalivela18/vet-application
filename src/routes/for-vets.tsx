@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { BadgeCheck, Clock, Users } from "lucide-react";
+import { BadgeCheck, Clock, Users, X, Plus } from "lucide-react";
 import { createVetProfile, getMyAccount } from "@/lib/account.functions";
 import { useSession } from "@/hooks/use-session";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CONSULTATION_TYPES, SPECIES_OPTIONS } from "@/lib/format";
 
-type Species = "dog" | "cat" | "rabbit" | "bird" | "other";
+type Species = "dog" | "cat" | "rabbit" | "bird";
 type Consultation = "clinic" | "video" | "home";
 
 export const Route = createFileRoute("/for-vets")({
@@ -51,8 +51,11 @@ function ForVetsPage() {
   const [qualification, setQualification] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [experienceYears, setExperienceYears] = useState("3");
-  const [specialties, setSpecialties] = useState("General practice");
+  const [specialties, setSpecialties] = useState<string[]>(["General practice"]);
+  const [specialtyDraft, setSpecialtyDraft] = useState("");
   const [petTypes, setPetTypes] = useState<Species[]>(["dog", "cat"]);
+  const [showOther, setShowOther] = useState(false);
+  const [otherPetType, setOtherPetType] = useState("");
   const [consultationTypes, setConsultationTypes] = useState<Consultation[]>(["clinic"]);
   const [consultationFee, setConsultationFee] = useState("500");
   const [homeVisitFee, setHomeVisitFee] = useState("");
@@ -61,26 +64,31 @@ function ForVetsPage() {
   const [acceptsEmergency, setAcceptsEmergency] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      create({
+    mutationFn: () => {
+      const finalSpecialties = specialtyDraft.trim()
+        ? [...specialties, specialtyDraft.trim()]
+        : specialties;
+      const finalPetTypes = [
+        ...petTypes,
+        ...(showOther && otherPetType.trim() ? [otherPetType.trim()] : []),
+      ];
+      return create({
         data: {
           fullName: fullName.trim(),
           qualification: qualification.trim(),
+          registrationNumber: registrationNumber.trim(),
           experienceYears: Number(experienceYears) || 0,
-          specialties: specialties
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
-          petTypes,
+          specialties: finalSpecialties,
+          petTypes: finalPetTypes,
           consultationTypes,
           consultationFee: Number(consultationFee) || 0,
           acceptsEmergency,
-          ...(registrationNumber.trim() ? { registrationNumber: registrationNumber.trim() } : {}),
           ...(homeVisitFee.trim() ? { homeVisitFee: Number(homeVisitFee) } : {}),
           ...(phone.trim() ? { phone: phone.trim() } : {}),
           ...(bio.trim() ? { bio: bio.trim() } : {}),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Profile created — welcome to VetNow");
       navigate({ to: "/vet-console" });
@@ -90,6 +98,23 @@ function ForVetsPage() {
 
   function toggle<T>(list: T[], value: T, set: (next: T[]) => void) {
     set(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  }
+
+  function addSpecialty(raw: string) {
+    const value = raw.trim();
+    if (!value) return;
+    if (specialties.length >= 8) {
+      toast.error("Maximum 8 specialties");
+      return;
+    }
+    if (!specialties.some((s) => s.toLowerCase() === value.toLowerCase())) {
+      setSpecialties([...specialties, value]);
+    }
+    setSpecialtyDraft("");
+  }
+
+  function removeSpecialty(value: string) {
+    setSpecialties(specialties.filter((s) => s !== value));
   }
 
   return (
@@ -155,8 +180,17 @@ function ForVetsPage() {
           className="surface-panel mt-8 space-y-5 p-6"
           onSubmit={(e) => {
             e.preventDefault();
-            if (petTypes.length === 0) {
+            const hasOther = showOther && otherPetType.trim().length > 0;
+            if (petTypes.length === 0 && !hasOther) {
               toast.error("Select at least one pet type");
+              return;
+            }
+            if (showOther && !otherPetType.trim()) {
+              toast.error("Enter the other pet type");
+              return;
+            }
+            if (specialties.length === 0 && !specialtyDraft.trim()) {
+              toast.error("Add at least one specialty");
               return;
             }
             if (consultationTypes.length === 0) {
@@ -192,11 +226,15 @@ function ForVetsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="reg">Registration number (optional)</Label>
+              <Label htmlFor="reg">Registration number</Label>
               <Input
                 id="reg"
+                required
                 value={registrationNumber}
                 onChange={(e) => setRegistrationNumber(e.target.value)}
+                placeholder="VCI/2014/01234"
+                minLength={3}
+                maxLength={60}
                 className="mt-1.5"
               />
             </div>
@@ -216,29 +254,83 @@ function ForVetsPage() {
           </div>
 
           <div>
-            <Label htmlFor="spec">Specialties (comma separated)</Label>
-            <Input
-              id="spec"
-              required
-              value={specialties}
-              onChange={(e) => setSpecialties(e.target.value)}
-              className="mt-1.5"
-            />
+            <Label htmlFor="spec">Specialties</Label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {specialties.map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground"
+                >
+                  {s}
+                  <button
+                    type="button"
+                    onClick={() => removeSpecialty(s)}
+                    aria-label={`Remove ${s}`}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Input
+                id="spec"
+                value={specialtyDraft}
+                onChange={(e) => setSpecialtyDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addSpecialty(specialtyDraft);
+                  }
+                }}
+                onBlur={() => addSpecialty(specialtyDraft)}
+                placeholder="Type a specialty and press Enter"
+                maxLength={60}
+                className="mt-0"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addSpecialty(specialtyDraft)}
+              >
+                <Plus className="size-4" />
+                Add
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Up to 8. Examples: Internal medicine, Surgery, Dermatology.
+            </p>
           </div>
 
           <div>
             <Label>Pet types treated</Label>
             <div className="mt-2 flex flex-wrap gap-4">
-              {SPECIES_OPTIONS.map((s) => (
+              {SPECIES_OPTIONS.filter((s) => s.value !== "other").map((s) => (
                 <label key={s.value} className="flex items-center gap-2 text-sm">
                   <Checkbox
-                    checked={petTypes.includes(s.value)}
-                    onCheckedChange={() => toggle(petTypes, s.value, setPetTypes)}
+                    checked={petTypes.includes(s.value as Species)}
+                    onCheckedChange={() => toggle(petTypes, s.value as Species, setPetTypes)}
                   />
                   {s.label}
                 </label>
               ))}
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={showOther} onCheckedChange={(v) => setShowOther(v === true)} />
+                Other
+              </label>
             </div>
+            {showOther ? (
+              <Input
+                aria-label="Other pet type"
+                value={otherPetType}
+                onChange={(e) => setOtherPetType(e.target.value)}
+                placeholder="e.g. Horse, Guinea pig"
+                maxLength={40}
+                className="mt-2"
+              />
+            ) : null}
           </div>
 
           <div>
