@@ -46,7 +46,7 @@ const DOC_FIELDS: { kind: VetDocKind; label: string; required: boolean }[] = [
   { kind: "degree", label: "BVSc & AH degree certificate", required: true },
   { kind: "registration", label: "Veterinary council registration certificate", required: true },
   { kind: "gov_id", label: "Government photo ID (Aadhaar / PAN / passport)", required: true },
-  { kind: "selfie", label: "Selfie holding your ID", required: true },
+  { kind: "selfie", label: "Selfie holding your ID (optional)", required: false },
   { kind: "clinic", label: "Clinic registration (optional)", required: false },
 ];
 
@@ -374,14 +374,12 @@ function VetConsolePage() {
               })}
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="verif-notes">Notes for our review team</Label>
+              <Label htmlFor="verif-notes">Notes for our review team (optional)</Label>
               <Textarea
                 id="verif-notes"
                 value={verifNotes}
                 onChange={(e) => setVerifNotes(e.target.value)}
                 placeholder="Your college, degree year, clinic address, or anything that helps us verify you."
-                required
-                minLength={10}
                 maxLength={1000}
                 rows={3}
               />

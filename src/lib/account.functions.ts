@@ -183,7 +183,7 @@ export const getMyVetDocuments = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
-const REQUIRED_DOC_KINDS: VetDocKind[] = ["degree", "registration", "gov_id", "selfie"];
+const REQUIRED_DOC_KINDS: VetDocKind[] = ["degree", "registration", "gov_id"];
 
 export const submitVetVerification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -191,7 +191,7 @@ export const submitVetVerification = createServerFn({ method: "POST" })
     z
       .object({
         registrationNumber: z.string().trim().min(3).max(60),
-        notes: z.string().trim().min(10).max(1000),
+        notes: z.string().trim().max(1000).optional(),
         documents: z
           .array(
             z.object({
@@ -240,7 +240,7 @@ export const submitVetVerification = createServerFn({ method: "POST" })
       .from("vets")
       .update({
         registration_number: data.registrationNumber,
-        verification_notes: data.notes,
+        verification_notes: data.notes || null,
         verification: "PENDING",
         verification_reason: null,
         verification_submitted_at: new Date().toISOString(),
