@@ -13,13 +13,15 @@ export type MyAccount = {
 export const VET_DOC_KINDS = ["degree", "registration", "gov_id", "selfie", "clinic"] as const;
 export type VetDocKind = (typeof VET_DOC_KINDS)[number];
 
-export type PendingVetVerification = {
+export type VetVerificationRow = {
   id: string;
   user_id: string | null;
   full_name: string;
   qualification: string;
   registration_number: string | null;
+  verification: Enums<"verification_state">;
   verification_notes: string | null;
+  verification_reason: string | null;
   verification_submitted_at: string | null;
   specialties: string[];
   experience_years: number;
@@ -195,6 +197,35 @@ export const getMyVetDocuments = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+export const getMyVetDocumentUrls = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ kind: string; url: string | null }[]> => {
+    const { data: vet, error: vetError } = await context.supabase
+      .from("vets")
+      .select("id")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (vetError) throw new Error(vetError.message);
+    if (!vet) return [];
+
+    const { data: docs, error } = await context.supabase
+      .from("vet_documents")
+      .select("kind, file_path")
+      .eq("vet_id", vet.id)
+      .order("uploaded_at");
+    if (error) throw new Error(error.message);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const out: { kind: string; url: string | null }[] = [];
+    for (const d of docs ?? []) {
+      const { data: signed } = await supabaseAdmin.storage
+        .from("vet-documents")
+        .createSignedUrl(d.file_path, 3600);
+      out.push({ kind: d.kind, url: signed?.signedUrl ?? null });
+    }
+    return out;
+  });
+
 const REQUIRED_DOC_KINDS: VetDocKind[] = ["degree", "registration", "gov_id"];
 
 export const submitVetVerification = createServerFn({ method: "POST" })
@@ -262,9 +293,15 @@ export const submitVetVerification = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const listPendingVetVerifications = createServerFn({ method: "GET" })
+const VERIFICATION_FILTERS = ["PENDING", "VERIFIED", "REJECTED", "ALL"] as const;
+export type VerificationFilter = (typeof VERIFICATION_FILTERS)[number];
+
+export const listVetVerifications = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<PendingVetVerification[]> => {
+  .inputValidator((input: unknown) =>
+    z.object({ status: z.enum(VERIFICATION_FILTERS).default("PENDING") }).parse(input ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<VetVerificationRow[]> => {
     const { data: adminRole } = await context.supabase
       .from("user_roles")
       .select("role")
@@ -273,14 +310,16 @@ export const listPendingVetVerifications = createServerFn({ method: "GET" })
       .maybeSingle();
     if (!adminRole) throw new Error("Admin access required");
 
-    const { data: vets, error } = await context.supabase
+    let query = context.supabase
       .from("vets")
       .select(
-        "id, user_id, full_name, qualification, registration_number, verification_notes, verification_submitted_at, specialties, experience_years, phone, created_at",
+        "id, user_id, full_name, qualification, registration_number, verification, verification_notes, verification_reason, verification_submitted_at, specialties, experience_years, phone, created_at",
       )
-      .eq("verification", "PENDING")
-      .not("verification_submitted_at", "is", null)
-      .order("verification_submitted_at", { ascending: true });
+      .not("verification_submitted_at", "is", null);
+    if (data.status !== "ALL") query = query.eq("verification", data.status);
+    const { data: vets, error } = await query.order("verification_submitted_at", {
+      ascending: false,
+    });
     if (error) throw new Error(error.message);
 
     const rows = vets ?? [];

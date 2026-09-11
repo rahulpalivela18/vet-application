@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { BadgeCheck, ShieldAlert } from "lucide-react";
 import {
   getMyAccount,
-  getMyVetDocuments,
+  getMyVetDocumentUrls,
   updateMyProfile,
   type MyAccount,
 } from "@/lib/account.functions";
@@ -171,9 +171,9 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 function VetSummary({ vet }: { vet: Tables<"vets"> }) {
-  const fetchDocs = useServerFn(getMyVetDocuments);
+  const fetchDocs = useServerFn(getMyVetDocumentUrls);
   const docs = useQuery({ queryKey: ["my-vet-documents"], queryFn: () => fetchDocs() });
-  const uploaded = new Set((docs.data ?? []).map((d) => d.kind));
+  const urlByKind = new Map((docs.data ?? []).map((d) => [d.kind, d.url]));
 
   const verified = vet.verification === "VERIFIED";
 
@@ -237,19 +237,27 @@ function VetSummary({ vet }: { vet: Tables<"vets"> }) {
       <div className="mt-4 border-t border-border pt-4">
         <p className="text-xs font-medium text-muted-foreground">Documents</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {Object.keys(DOC_LABEL).map((kind) => (
-            <span
-              key={kind}
-              className={`rounded-md px-2 py-1 text-xs font-medium ${
-                uploaded.has(kind)
-                  ? "bg-available/15 text-available"
-                  : "bg-secondary text-muted-foreground"
-              }`}
-            >
-              {DOC_LABEL[kind]}
-              {uploaded.has(kind) ? " · uploaded" : " · not uploaded"}
-            </span>
-          ))}
+          {Object.keys(DOC_LABEL).map((kind) => {
+            const has = urlByKind.has(kind);
+            return has ? (
+              <a
+                key={kind}
+                href={urlByKind.get(kind) ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md bg-available/15 px-2 py-1 text-xs font-medium text-available hover:underline"
+              >
+                {DOC_LABEL[kind]} · view
+              </a>
+            ) : (
+              <span
+                key={kind}
+                className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-muted-foreground"
+              >
+                {DOC_LABEL[kind]} · not uploaded
+              </span>
+            );
+          })}
         </div>
       </div>
     </section>
