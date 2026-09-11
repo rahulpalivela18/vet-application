@@ -4,9 +4,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Tables, Enums } from "@/integrations/supabase/types";
 
 export type MyAppointment = Tables<"appointments"> & {
-  vet: (Pick<Tables<"vets">, "id" | "full_name" | "qualification"> & {
-    clinic: Pick<Tables<"clinics">, "name" | "area"> | null;
-  }) | null;
+  vet:
+    | (Pick<Tables<"vets">, "id" | "full_name" | "qualification"> & {
+        clinic: Pick<Tables<"clinics">, "name" | "area"> | null;
+      })
+    | null;
   pet: Pick<Tables<"pets">, "id" | "name" | "species"> | null;
   review: Pick<Tables<"reviews">, "id"> | null;
 };
@@ -33,10 +35,15 @@ export const createAppointment = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ id: string }> => {
     const { data: vet, error: vetError } = await context.supabase
       .from("vets")
-      .select("id, consultation_fee, home_visit_fee, consultation_types, current_status")
+      .select(
+        "id, consultation_fee, home_visit_fee, consultation_types, current_status, verification",
+      )
       .eq("id", data.vetId)
       .single();
     if (vetError || !vet) throw new Error("Veterinarian not found");
+    if (vet.verification !== "VERIFIED") {
+      throw new Error("This veterinarian is not yet verified");
+    }
     if (!vet.consultation_types.includes(data.consultationType)) {
       throw new Error("This consultation type is not offered by the selected vet");
     }
@@ -197,7 +204,8 @@ export const createReview = createServerFn({ method: "POST" })
       .select("rating")
       .eq("vet_id", appointment.vet_id);
     const all = (ratings ?? []).map((r) => r.rating);
-    const avg = all.length > 0 ? Math.round((all.reduce((s, r) => s + r, 0) / all.length) * 10) / 10 : null;
+    const avg =
+      all.length > 0 ? Math.round((all.reduce((s, r) => s + r, 0) / all.length) * 10) / 10 : null;
     await supabaseAdmin
       .from("vets")
       .update({ rating: avg, review_count: all.length })
