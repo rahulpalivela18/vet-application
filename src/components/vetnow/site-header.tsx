@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getMyAccount } from "@/lib/account.functions";
 
-const NAV = [
+const NAV: { to: "/find" | "/assistant" | "/emergency"; label: string; soon?: boolean }[] = [
   { to: "/find", label: "Find a vet" },
-  { to: "/assistant", label: "AI Assistant" },
+  { to: "/assistant", label: "AI Assistant", soon: true },
   { to: "/emergency", label: "Emergency" },
-] as const;
+];
 
 export function SiteHeader() {
   const { user, loading } = useSession();
@@ -56,7 +56,14 @@ export function SiteHeader() {
               className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               activeProps={{ className: "bg-secondary text-foreground" }}
             >
-              {item.label}
+              <span className="inline-flex items-center gap-1.5">
+                {item.label}
+                {item.soon ? (
+                  <span className="rounded-full bg-busy/15 px-1.5 py-0.5 text-[10px] font-semibold text-busy">
+                    Soon
+                  </span>
+                ) : null}
+              </span>
             </Link>
           ))}
         </nav>
@@ -123,7 +130,14 @@ export function SiteHeader() {
               className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
               activeProps={{ className: "bg-secondary text-foreground" }}
             >
-              {item.label}
+              <span className="inline-flex items-center gap-1.5">
+                {item.label}
+                {item.soon ? (
+                  <span className="rounded-full bg-busy/15 px-1.5 py-0.5 text-[10px] font-semibold text-busy">
+                    Soon
+                  </span>
+                ) : null}
+              </span>
             </Link>
           ))}
           {!loading && user ? (

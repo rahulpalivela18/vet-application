@@ -1,4 +1,50 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Bot, Siren } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+export const Route = createFileRoute("/assistant")({
+  head: () => ({
+    meta: [
+      { title: "VetNow Assistant — coming soon" },
+      {
+        name: "description",
+        content: "AI symptom triage and structured clinical handoff notes. Coming soon.",
+      },
+    ],
+  }),
+  component: AssistantComingSoon,
+});
+
+function AssistantComingSoon() {
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16 text-center">
+      <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-accent text-accent-foreground">
+        <Bot className="size-6" />
+      </span>
+      <h1 className="mt-4 font-display text-3xl font-extrabold">VetNow Assistant</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        AI symptom triage and structured handoff notes are coming soon. It will assess urgency and
+        prepare a clinical note your vet can read in seconds — never diagnosing or prescribing.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Button asChild>
+          <Link to="/find">Find a vet</Link>
+        </Button>
+        <Button asChild variant="outline" className="text-emergency">
+          <Link to="/emergency">
+            <Siren className="size-4" />
+            Emergency
+          </Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* Previous implementation kept for when the AI gateway is wired up (Phase 2).
+ * Re-enable by restoring the Route component above to AssistantPage.
+
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -324,3 +370,5 @@ function List({ items, dot }: { items: string[]; dot: string }) {
     </ul>
   );
 }
+
+*/
